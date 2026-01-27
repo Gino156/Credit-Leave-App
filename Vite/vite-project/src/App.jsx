@@ -3,7 +3,7 @@ import {
   Card, CardHeader, CardBody, Divider, Button, Chip, Spinner,
   Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
   Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem, Link,
-  User
+  User, Skeleton
 } from "@heroui/react";
 
 
@@ -96,15 +96,21 @@ function App() {
         
         {/* PROFILE HEADER - Responsive Layout */}
         <section className="flex flex-col sm:flex-row justify-between items-center bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 gap-4">
-          <User
-            avatarProps={{showFallback: true, size: "lg", src: "", isBordered: true, color: "default" }}
-            description="Employee ID: E25-0296"
-            name="Gino Reyes"
-            className="transition-transform hover:scale-105"
-          />
-          <Button color="success" variant="shadow" startContent={<PlusIcon size={20} />} radius="full" className="text-white font-bold w-full sm:w-auto">
-            Request Leave
-          </Button>
+              <User
+                avatarProps={{
+                  showFallback: true, 
+                  size: "lg", 
+                  src: "", 
+                  isBordered: true, 
+                  color: "default" 
+                }}
+                description={`Employee ID: ${leaveHistory[0]?.EmployeeID || "Loading..."}`}
+                name={loading ? <Skeleton className="h-4 w-32 rounded-lg" /> : (leaveHistory[0]?.EmployeeName || "User Not Found")}
+                className="transition-transform hover:scale-105"
+              />
+              <Button color="success" variant="shadow" startContent={<PlusIcon size={20} />} radius="full" className="text-white font-bold w-full sm:w-auto">
+                Request Leave
+              </Button>
         </section>
 
         {/* STATS CARDS - Mobile Scrollable, Desktop Grid */}
@@ -173,7 +179,7 @@ function App() {
             </CardHeader>
             <Divider className="opacity-50" />
             <CardBody className="px-2 sm:px-4">
-              <Table isStriped aria-label="Leave History" removeWrapper shadow="none" className="min-w-full">
+                <Table isStriped aria-label="Leave History" removeWrapper shadow="none" className="min-w-full">
                 <TableHeader>
                   <TableColumn className="bg-transparent text-gray-400">ID</TableColumn>
                   <TableColumn className="bg-transparent text-gray-400">DATE CREATED</TableColumn>
@@ -182,26 +188,38 @@ function App() {
                   <TableColumn className="bg-transparent text-gray-400">TYPE</TableColumn>
                   <TableColumn className="bg-transparent text-gray-400">STATUS</TableColumn>
                 </TableHeader>
-                <TableBody emptyContent={"No rows to display."} isLoading={loading}>
-                  {leaveHistory.map((item) => (
-                    <TableRow key={item.LeaveApplicationId} className="border-b border-gray-50 last:border-none">
-                      <TableCell className="font-bold">{item.LeaveApplicationId}</TableCell>
-                      <TableCell className="text-xs">{item.DateCreated}</TableCell>
-                      <TableCell className="text-xs">{item.BeginDate}</TableCell>
-                      <TableCell className="text-xs">{item.EndDate}</TableCell>
-                      <TableCell className="text-xs">{item.TimeOffType}</TableCell>
-                      <TableCell>
-                        <Chip size="sm" color={getStatusColor(item.ApprovalStatus)} variant="dot" className="border-none font-bold">
-                          {item.ApprovalStatus}
-                        </Chip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                <TableBody emptyContent={!loading && "No rows to display."}>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <TableRow key={index}>
+                        <TableCell><Skeleton className="h-3 w-8 rounded-lg" /></TableCell>
+                        <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
+                        <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
+                        <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
+                        <TableCell><Skeleton className="h-3 w-16 rounded-lg" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    leaveHistory.map((item) => (
+                      <TableRow key={item.LeaveApplicationId} className="border-b border-gray-50 last:border-none">
+                        <TableCell className="font-bold">{item.LeaveApplicationId}</TableCell>
+                        <TableCell className="text-xs">{item.DateCreated}</TableCell>
+                        <TableCell className="text-xs">{item.BeginDate}</TableCell>
+                        <TableCell className="text-xs">{item.EndDate}</TableCell>
+                        <TableCell className="text-xs">{item.TimeOffType}</TableCell>
+                        <TableCell>
+                          <Chip size="sm" color={getStatusColor(item.ApprovalStatus)} variant="dot" className="border-none font-bold">
+                            {item.ApprovalStatus}
+                          </Chip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardBody>
           </Card>
-
         </div>
       </main>
     </div>
