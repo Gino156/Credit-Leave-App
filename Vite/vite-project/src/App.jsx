@@ -60,6 +60,15 @@ function App() {
     { label: "Available", value: "18", color: "text-green-600", bg: "bg-green-50" }
   ];
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleRequestLeave = async() => {
+    setIsSubmitting(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    setIsSubmitting(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       {/* NAVBAR */}
@@ -108,7 +117,15 @@ function App() {
                 name={loading ? <Skeleton className="h-4 w-32 rounded-lg" /> : (leaveHistory[0]?.EmployeeName || "User Not Found")}
                 className="transition-transform hover:scale-105"
               />
-              <Button color="success" variant="shadow" startContent={<PlusIcon size={20} />} radius="full" className="text-white font-bold w-full sm:w-auto">
+              <Button 
+                color="success" 
+                variant="shadow" 
+                startContent={!isSubmitting && <PlusIcon size={20} />} 
+                radius="full" 
+                className="text-white font-bold w-full sm:w-auto"
+                isLoading={isSubmitting}
+                onPress={handleRequestLeave}
+              >
                 Request Leave
               </Button>
         </section>
