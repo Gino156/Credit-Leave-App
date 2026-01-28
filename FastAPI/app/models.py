@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Date
-from database import Base
+from sqlalchemy import Column, Integer, String, Date, Boolean
+from database import Base #alchemy model
+from pydantic import BaseModel #pydantic model
 
 class LeaveTable(Base):
     __tablename__ = "LeaveTable"
@@ -36,3 +37,23 @@ class vw_TimeOffSummary(Base):
     Earned = Column(Integer)
     EndingBalance = Column(Integer)
     Available = Column(Integer)
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: str | None = None
+
+
+class User(BaseModel):
+    username: str
+    email: str | None = None
+    full_name: str | None = None
+    disabled: bool | None = None
+
+
+class UserInDB(User):
+    hashed_password: str
+
