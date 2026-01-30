@@ -1,10 +1,10 @@
 from sqlalchemy import Column, Integer, String, Date, Boolean
-from database import Base #alchemy model
-from pydantic import BaseModel #pydantic model
+from database import BasePayroll, BaseAuth
+from pydantic import BaseModel
 
-class LeaveTable(Base):
+# --- SQL SERVER MODELS (Binds to BasePayroll) ---
+class LeaveTable(BasePayroll):
     __tablename__ = "LeaveTable"
-
     LeaveId = Column(Integer, primary_key=True, index=True) 
     EmployeeId = Column(Integer)
     FileDate = Column(Date)
@@ -16,9 +16,8 @@ class LeaveTable(Base):
     Consume = Column(Integer)
     AvailableBalance = Column(Integer)
 
-class vw_TimeOffSummary(Base):
+class vw_TimeOffSummary(BasePayroll):
     __tablename__ = "vw_TimeOffSummary"
-
     LeaveApplicationId = Column(Integer, primary_key=True, index=True)
     EmployeeID = Column(Integer, index=True)
     DateCreated= Column(Date)
@@ -38,14 +37,23 @@ class vw_TimeOffSummary(Base):
     EndingBalance = Column(Integer)
     Available = Column(Integer)
 
+# --- POSTGRESQL MODELS (Binds to BaseAuth) ---
+class UserTable(BaseAuth):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    email = Column(String, nullable=True)
+    full_name = Column(String, nullable=True)
+    hashed_password = Column(String)
+    disabled = Column(Boolean, default=False)
+
+# --- PYDANTIC MODELS (Schemas) ---
 class Token(BaseModel):
     access_token: str
     token_type: str
 
-
 class TokenData(BaseModel):
     username: str | None = None
-
 
 class User(BaseModel):
     username: str
@@ -53,7 +61,5 @@ class User(BaseModel):
     full_name: str | None = None
     disabled: bool | None = None
 
-
 class UserInDB(User):
     hashed_password: str
-
