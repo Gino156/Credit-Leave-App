@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { 
   Card, CardHeader, CardBody, Divider, Button, Chip, Spinner,
-  Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
   User, Skeleton
 } from "@heroui/react";
 
-// Components Import
 import LoginPage from './components/LoginPage';
 import MainNavbar from './components/MainNavbar';
+import LeaveHistoryTable from './components/LeaveHistoryTable';
 
 // Icons
 export const PlusIcon = ({ fill = "currentColor", size = 24 }) => (
@@ -38,6 +37,7 @@ function App() {
       .catch(() => setApiData("Server Offline"));
 
     // 2. Fetch Leave History
+    // Dahil sa backend logic sa taas, ang 'myToken' na ito ay may dalang 'id: 1'
     fetch(`${BASE_URL}/LeaveHistory`, {
       method: 'GET',
       headers: {
@@ -54,6 +54,7 @@ function App() {
         return res.json();
       })
       .then((data) => {
+        // Ang 'data' na darating dito ay puro records lang ni EmployeeID = 1 (Gino Reyes)
         setLeaveHistory(data);
         setLoading(false);
       })
@@ -76,20 +77,12 @@ function App() {
     setIsSubmitting(false);
   };
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'approved': return 'success';
-      case 'pending': return 'warning';
-      case 'rejected': return 'danger';
-      default: return 'default';
-    }
-  };
-
+  // Stats calculation based on filtered data
   const stats = [
-    { label: "Ending balance", value: "8", color: "text-black-600" },
+    { label: "Ending balance", value: leaveHistory[0]?.EndingBalance || "0", color: "text-black-600" },
     { label: "Earned", value: "10", color: "text-blue-600" },
-    { label: "Consumed", value: "1", color: "text-red-600" },
-    { label: "Available", value: "18", color: "text-green-600" }
+    { label: "Consumed", value: leaveHistory.filter(l => l.ApprovalStatus === 'Approved').length || "0", color: "text-red-600" },
+    { label: "Available", value: leaveHistory[0]?.AvailableCredits || "0", color: "text-green-600" }
   ];
 
   // --- AUTH BOUNCER ---
@@ -100,16 +93,20 @@ function App() {
   // --- MAIN DASHBOARD RENDER ---
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
-      {/* Refactored Navbar */}
       <MainNavbar onLogout={handleLogout} />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 flex flex-col gap-6 sm:gap-8">
         
-        {/* PROFILE HEADER */}
+        {/* PROFILE HEADER - This will show 'Gino Reyes' if the backend filter is working */}
         <section className="flex flex-col sm:flex-row justify-between items-center bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 gap-4">
           <User
-            avatarProps={{ showFallback: true, size: "lg", isBordered: true }}
-            description={`Employee ID: ${leaveHistory[0]?.EmployeeID || "..."}`}
+            avatarProps={{ 
+              showFallback: true, 
+              size: "lg", 
+              isBordered: true,
+              className: "border-green-600 border-2 bg-white text-slate-400" 
+            }}
+            description={`Employee ID: ${leaveHistory[0]?.EmployeeID || "Loading..."}`}
             name={loading ? <Skeleton className="h-4 w-32 rounded-lg" /> : (leaveHistory[0]?.EmployeeName || "User")}
             className="transition-transform hover:scale-105 uppercase font-bold"
           />
@@ -118,7 +115,7 @@ function App() {
             variant="shadow" 
             startContent={!isSubmitting && <PlusIcon size={20} />} 
             radius="full" 
-            className="text-white font-bold w-full sm:w-auto"
+            className="text-white font-bold w-full sm:w-auto bg-green-600"
             isLoading={isSubmitting}
             onPress={handleRequestLeave}
           >
@@ -142,7 +139,6 @@ function App() {
         {/* BOTTOM SECTION */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 sm:gap-8">
           
-          {/* SYSTEM STATUS */}
           <Card className="shadow-sm xl:col-span-2 overflow-hidden">
             <CardHeader className="flex flex-col items-start px-6 pt-6 pb-2">
               <p className="text-tiny uppercase font-bold text-primary tracking-wider">Live Connection</p>
@@ -170,51 +166,9 @@ function App() {
             </div>
           </Card>
 
-          {/* HISTORY TABLE */}
-          <Card className="shadow-sm xl:col-span-3">
-            <CardHeader className="px-6 pt-6 pb-2 flex justify-between items-center">
-              <h2 className="text-xl font-bold">Leave History</h2>
-            </CardHeader>
-            <Divider className="opacity-50" />
-            <CardBody className="px-2 sm:px-4">
-              <Table isStriped aria-label="Leave History" removeWrapper shadow="none" className="min-w-full">
-                <TableHeader>
-                  <TableColumn className="bg-transparent text-gray-400">ID</TableColumn>
-                  <TableColumn className="bg-transparent text-gray-400">BEGIN</TableColumn>
-                  <TableColumn className="bg-transparent text-gray-400">END</TableColumn>
-                  <TableColumn className="bg-transparent text-gray-400">TYPE</TableColumn>
-                  <TableColumn className="bg-transparent text-gray-400">STATUS</TableColumn>
-                </TableHeader>
-                <TableBody emptyContent={!loading && "No records found."}>
-                  {loading ? (
-                    Array.from({ length: 3 }).map((_, index) => (
-                      <TableRow key={index}>
-                        <TableCell><Skeleton className="h-3 w-8 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-3 w-16 rounded-lg" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    leaveHistory.map((item) => (
-                      <TableRow key={item.LeaveApplicationId}>
-                        <TableCell className="font-bold">{item.LeaveApplicationId}</TableCell>
-                        <TableCell className="text-xs">{item.BeginDate}</TableCell>
-                        <TableCell className="text-xs">{item.EndDate}</TableCell>
-                        <TableCell className="text-xs">{item.TimeOffType}</TableCell>
-                        <TableCell>
-                          <Chip size="sm" color={getStatusColor(item.ApprovalStatus)} variant="dot" className="border-none font-bold uppercase">
-                            {item.ApprovalStatus}
-                          </Chip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardBody>
-          </Card>
+          {/* LEAVE HISTORY TABLE */}
+          <LeaveHistoryTable data={leaveHistory} loading={loading} />
+          
         </div>
       </main>
     </div>

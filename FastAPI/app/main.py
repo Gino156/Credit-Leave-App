@@ -134,8 +134,17 @@ async def create_user(
 # Protected Route: Data mula sa SQL Server
 @app.get("/LeaveHistory")
 async def get_leave_history(
-    current_user: Annotated[models.User, Depends(get_current_user)],
-    db: Session = Depends(get_payroll_db) # Connects to SQL Server
+    current_user: Annotated[models.UserTable, Depends(get_current_user)], # Gamitin ang UserTable model
+    db: Session = Depends(get_payroll_db)
 ):
-    # Secure access via Postgres, Data fetch from MS SQL
-    return db.query(models.vw_TimeOffSummary).all()
+    # 1. Kunin ang ID ni 'it2' mula sa current_user (na galing sa Postgres)
+    # Kung si it2 ay id=2 sa Postgres, ang logged_in_id ay magiging 2.
+    logged_in_id = current_user.id 
+
+    # 2. I-filter ang SQL Server View gamit ang ID na iyon
+    # Dito natin sinasabi na ang EmployeeID sa SQL Server ay dapat kapareho ng ID sa Postgres
+    user_data = db.query(models.vw_TimeOffSummary).filter(
+        models.vw_TimeOffSummary.EmployeeID == logged_in_id
+    ).all()
+
+    return user_data
