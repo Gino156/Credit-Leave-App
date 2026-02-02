@@ -1,10 +1,14 @@
+from datetime import date
 from sqlalchemy import Column, Integer, String, Date, Boolean, Numeric, Text
 from database import BasePayroll, BaseAuth
 from pydantic import BaseModel
 
 # --- SQL SERVER MODELS (Binds to BasePayroll) ---
 class LeaveTable(BasePayroll):
-    __tablename__ = "LeaveApplication" # Siguraduhing tugma sa actual table name sa SQL Server
+    __tablename__ = "LeaveApplication"
+
+    __table_args__ = {"implicit_returning": False}
+
     LeaveApplicationId = Column(Integer, primary_key=True, index=True) 
     EmployeeId = Column(Integer)
     DateCreated = Column(Date)
@@ -13,16 +17,17 @@ class LeaveTable(BasePayroll):
     ApprovalStatus = Column(String) 
     Description = Column(Text)
     UsedCredits = Column(Integer)
-    # Idagdag ang mga bagong columns dito para sa table mapping
-    OpeningBalance = Column(Numeric)
-    EarnedCredits = Column(Numeric)
-    EndingBalance = Column(Numeric)
-    AvailableCredits = Column(Numeric)
+    TimeOffType = Column(String)
+    OpeningBalance = Column(Numeric, default=0)
+    EarnedCredits = Column(Numeric, default=0)
+    EndingBalance = Column(Numeric, default=0)
+    AvailableCredits = Column(Numeric, default=0)
 
 class vw_TimeOffSummary(BasePayroll):
+    #must match the column names in SQL Server
     __tablename__ = "vw_TimeOffSummary"
     LeaveApplicationId = Column(Integer, primary_key=True, index=True)
-    EmployeeID = Column(Integer, index=True) # Ito ang gagamitin sa filter (current_user.id)
+    EmployeeID = Column(Integer, index=True) 
     DateCreated = Column(Date)
     BeginDate = Column(Date)
     EndDate = Column(Date)
@@ -35,11 +40,10 @@ class vw_TimeOffSummary(BasePayroll):
     CompanyId = Column(Integer)
     CompanyName = Column(String)
     CompanyCode = Column(String)
-    # Dapat tugma ang mga ito sa column names sa iyong SQL View script
     OpeningBalance = Column(Integer)
-    EarnedCredits = Column(Integer) # In-update mula sa 'Earned'
+    EarnedCredits = Column(Integer)
     EndingBalance = Column(Integer)
-    AvailableCredits = Column(Integer) # In-update mula sa 'Available'
+    AvailableCredits = Column(Integer) 
 
 # --- POSTGRESQL MODELS (Binds to BaseAuth) ---
 class UserTable(BaseAuth):
@@ -67,3 +71,10 @@ class User(BaseModel):
 
 class UserInDB(User):
     hashed_password: str
+
+    # Idagdag ito sa dulo ng models.py
+class LeaveRequestCreate(BaseModel):
+    TimeOffType: str
+    BeginDate: date
+    EndDate: date
+    Description: str

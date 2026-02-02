@@ -147,3 +147,43 @@ async def get_leave_history(
         return []
 
     return user_data
+
+# Siguraduhing na-import ang date at datetime sa main.py
+from datetime import date, datetime
+
+@app.post("/RequestLeave", status_code=status.HTTP_201_CREATED)
+async def request_leave(
+    leave_in: models.LeaveRequestCreate, 
+    current_user: Annotated[models.UserTable, Depends(get_current_user)],
+    db: Session = Depends(get_payroll_db)
+):
+    try:
+        days_diff = (leave_in.EndDate - leave_in.BeginDate).days + 1
+        if days_diff <= 0:
+            raise HTTPException(status_code=400, detail="EndDate must be after BeginDate")
+
+        new_leave = models.LeaveTable(
+            EmployeeId=current_user.id,
+            DateCreated=datetime.now(timezone.utc).date(),
+            BeginDate=leave_in.BeginDate,
+            EndDate=leave_in.EndDate,
+            TimeOffType=leave_in.TimeOffType,
+            Description=leave_in.Description,
+            UsedCredits=days_diff,
+            ApprovalStatus="Pending",
+            OpeningBalance=0, 
+            EarnedCredits=0,
+            EndingBalance=0,
+            AvailableCredits=0
+        )
+
+        db.add(new_leave)
+        db.commit()
+        # HUWAG tatawag ng new_leave.LeaveApplicationId dito
+
+        return {"message": "Success! Leave request submitted."}
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error details: {e}") # Para makita mo sa console kung may iba pang error
+        raise HTTPException(status_code=500, detail=str(e))
