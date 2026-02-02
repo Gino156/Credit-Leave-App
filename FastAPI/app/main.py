@@ -10,11 +10,10 @@ from sqlalchemy.orm import Session
 import jwt
 from pwdlib import PasswordHash
 import models
-# Import dependencies at engines mula sa database.py
+# Import dependencies from database.py
 from database import get_auth_db, get_payroll_db, pg_engine, BaseAuth
 
 # --- 0. AUTO-CREATE POSTGRES TABLE ---
-# Ito ang gagawa ng 'users' table sa auth_db mo sa Postgres
 BaseAuth.metadata.create_all(bind=pg_engine)
 print("Postgres sync complete.")
 
@@ -108,17 +107,17 @@ async def login_for_access_token(
     access_token = create_access_token(data={"sub": user.username})
     return models.Token(access_token=access_token, token_type="bearer")
 
-# ADMIN ROUTE: Dito ka gagawa ng user sa Postgres
+# Creating User Route
 @app.post("/admin/create-user", status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_in: models.UserInDB, 
     db: Session = Depends(get_auth_db)
 ):
-    # Check kung existing na ang user
+    # Check if user already exists
     if get_user(db, user_in.username):
         raise HTTPException(status_code=400, detail="Username already registered")
     
-    # I-save gamit ang UserTable model
+    # SAve new user to Postgres
     new_user = models.UserTable(
         username=user_in.username,
         email=user_in.email,
@@ -131,20 +130,20 @@ async def create_user(
     db.refresh(new_user)
     return {"message": f"User {new_user.username} successfully created in Postgres"}
 
-# Protected Route: Data mula sa SQL Server
+# Protected Route: Data from SQL Server
 @app.get("/LeaveHistory")
 async def get_leave_history(
-    current_user: Annotated[models.UserTable, Depends(get_current_user)], # Gamitin ang UserTable model
-    db: Session = Depends(get_payroll_db)
+    current_user: Annotated[models.UserTable, Depends(get_current_user)],
+    db: Session = Depends(get_payroll_db) # Connects to SQL Server
 ):
-    # 1. Kunin ang ID ni 'it2' mula sa current_user (na galing sa Postgres)
-    # Kung si it2 ay id=2 sa Postgres, ang logged_in_id ay magiging 2.
     logged_in_id = current_user.id 
 
-    # 2. I-filter ang SQL Server View gamit ang ID na iyon
-    # Dito natin sinasabi na ang EmployeeID sa SQL Server ay dapat kapareho ng ID sa Postgres
     user_data = db.query(models.vw_TimeOffSummary).filter(
         models.vw_TimeOffSummary.EmployeeID == logged_in_id
     ).all()
+
+    # 3. Error Handling
+    if not user_data:
+        return []
 
     return user_data

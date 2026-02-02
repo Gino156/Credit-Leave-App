@@ -1,26 +1,29 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean
+from sqlalchemy import Column, Integer, String, Date, Boolean, Numeric, Text
 from database import BasePayroll, BaseAuth
 from pydantic import BaseModel
 
 # --- SQL SERVER MODELS (Binds to BasePayroll) ---
 class LeaveTable(BasePayroll):
-    __tablename__ = "LeaveTable"
-    LeaveId = Column(Integer, primary_key=True, index=True) 
+    __tablename__ = "LeaveApplication" # Siguraduhing tugma sa actual table name sa SQL Server
+    LeaveApplicationId = Column(Integer, primary_key=True, index=True) 
     EmployeeId = Column(Integer)
-    FileDate = Column(Date)
+    DateCreated = Column(Date)
     BeginDate = Column(Date)
     EndDate = Column(Date)
-    LeaveStatus = Column(String) 
-    ReasonOfLeave = Column(String)
-    LeaveYear = Column(Integer)
-    Consume = Column(Integer)
-    AvailableBalance = Column(Integer)
+    ApprovalStatus = Column(String) 
+    Description = Column(Text)
+    UsedCredits = Column(Integer)
+    # Idagdag ang mga bagong columns dito para sa table mapping
+    OpeningBalance = Column(Numeric)
+    EarnedCredits = Column(Numeric)
+    EndingBalance = Column(Numeric)
+    AvailableCredits = Column(Numeric)
 
 class vw_TimeOffSummary(BasePayroll):
     __tablename__ = "vw_TimeOffSummary"
     LeaveApplicationId = Column(Integer, primary_key=True, index=True)
-    EmployeeID = Column(Integer, index=True)
-    DateCreated= Column(Date)
+    EmployeeID = Column(Integer, index=True) # Ito ang gagamitin sa filter (current_user.id)
+    DateCreated = Column(Date)
     BeginDate = Column(Date)
     EndDate = Column(Date)
     EmployeeName = Column(String)
@@ -32,10 +35,11 @@ class vw_TimeOffSummary(BasePayroll):
     CompanyId = Column(Integer)
     CompanyName = Column(String)
     CompanyCode = Column(String)
+    # Dapat tugma ang mga ito sa column names sa iyong SQL View script
     OpeningBalance = Column(Integer)
-    Earned = Column(Integer)
+    EarnedCredits = Column(Integer) # In-update mula sa 'Earned'
     EndingBalance = Column(Integer)
-    Available = Column(Integer)
+    AvailableCredits = Column(Integer) # In-update mula sa 'Available'
 
 # --- POSTGRESQL MODELS (Binds to BaseAuth) ---
 class UserTable(BaseAuth):

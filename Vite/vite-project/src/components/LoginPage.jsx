@@ -128,7 +128,7 @@ export default function LoginPage({ onLoginSuccess }) {
               isLoading={loading}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-7 rounded-2xl shadow-xl shadow-green-100 transition-all active:scale-[0.98]"
             >
-              SIGN IN TO DASHBOARD
+              LOG IN
             </Button>
           </form>
 
