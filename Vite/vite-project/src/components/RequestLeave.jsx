@@ -14,31 +14,40 @@ export default function RequestLeave({ isOpen, onClose, onSubmitSuccess }) {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    setLoading(true);
-    const myToken = localStorage.getItem("access_token");
+  setLoading(true);
+  const myToken = localStorage.getItem("access_token");
 
-    try {
-      const response = await fetch("http://127.0.0.1:8000/RequestLeave", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${myToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        onSubmitSuccess(); // I-refresh ang table sa App.jsx
-        onClose(); // Isara ang modal
-      } else {
-        alert("Failed to submit request");
-      }
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
+  // I-map ang frontend state sa backend schema
+  const payload = {
+    TimeOffType: formData.timeOffType,
+    BeginDate: formData.beginDate,
+    EndDate: formData.endDate,
+    Description: formData.description
   };
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/RequestLeave", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${myToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload) // Gamitin ang payload dito
+    });
+
+    if (response.ok) {
+      onSubmitSuccess(); 
+      onClose(); 
+    } else {
+      const errorData = await response.json();
+      alert(`Error: ${errorData.detail || "Failed to submit request"}`);
+    }
+  } catch (error) {
+    console.error("Error:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} placement="top-center" backdrop="blur">

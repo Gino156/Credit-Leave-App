@@ -158,12 +158,20 @@ async def request_leave(
     db: Session = Depends(get_payroll_db)
 ):
     try:
+
+        employee_info = db.query(models.vw_TimeOffSummary).filter(
+            models.vw_TimeOffSummary.EmployeeID == current_user.id
+        ).first()
+
+        # Default to 1 kung walang mahanap, o mag-error
+        emp_company_id = employee_info.CompanyId if employee_info else 1 
+
         days_diff = (leave_in.EndDate - leave_in.BeginDate).days + 1
-        if days_diff <= 0:
-            raise HTTPException(status_code=400, detail="EndDate must be after BeginDate")
+        
 
         new_leave = models.LeaveTable(
             EmployeeId=current_user.id,
+            CompanyId=emp_company_id, # Dito na papasok ang value
             DateCreated=datetime.now(timezone.utc).date(),
             BeginDate=leave_in.BeginDate,
             EndDate=leave_in.EndDate,
@@ -179,11 +187,9 @@ async def request_leave(
 
         db.add(new_leave)
         db.commit()
-        # HUWAG tatawag ng new_leave.LeaveApplicationId dito
 
         return {"message": "Success! Leave request submitted."}
 
     except Exception as e:
         db.rollback()
-        print(f"Error details: {e}") # Para makita mo sa console kung may iba pang error
         raise HTTPException(status_code=500, detail=str(e))

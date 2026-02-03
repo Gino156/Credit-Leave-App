@@ -22,6 +22,9 @@ class LeaveTable(BasePayroll):
     EarnedCredits = Column(Numeric, default=0)
     EndingBalance = Column(Numeric, default=0)
     AvailableCredits = Column(Numeric, default=0)
+    LeaveApplicationId = Column(Integer, primary_key=True, index=True)
+    EmployeeId = Column(Integer)
+    CompanyId = Column(Integer)
 
 class vw_TimeOffSummary(BasePayroll):
     #must match the column names in SQL Server
