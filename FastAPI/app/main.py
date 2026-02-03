@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -10,12 +10,10 @@ from sqlalchemy.orm import Session
 import jwt
 from pwdlib import PasswordHash
 import models
-# Import dependencies from database.py
 from database import get_auth_db, get_payroll_db, pg_engine, BaseAuth
 
 # --- 0. AUTO-CREATE POSTGRES TABLE ---
 BaseAuth.metadata.create_all(bind=pg_engine)
-print("Postgres sync complete.")
 
 app = FastAPI(title="Leave Credit App")
 
@@ -28,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 2. SECURITY CONFIG ---
+# --- SECURITY CONFIG ---
 SECRET_KEY ="f34fb792147d3f5b418cebec18fd2b192b961b2acae5cdb1136f9dc5acc7ae52"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -36,7 +34,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 password_hash = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# --- 3. HELPER FUNCTIONS ---
+# --- HELPERS ---
 def verify_password(plain_password, hashed_password):
     return password_hash.verify(plain_password, hashed_password)
 
@@ -44,27 +42,12 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 def get_user(db: Session, username: str):
-    # Dito natin kukunin ang user sa Postgres (UserTable model)
     return db.query(models.UserTable).filter(models.UserTable.username == username).first()
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user(db, username)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-# --- 4. DEPENDENCIES ---
+# --- DEPENDENCIES ---
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session = Depends(get_auth_db) # Postgres for auth check
+    db: Session = Depends(get_auth_db)
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,31 +57,27 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-        if username is None:
-            raise credentials_exception
+        if username is None: raise credentials_exception
     except InvalidTokenError:
         raise credentials_exception
         
     user = get_user(db, username=username)
-    if user is None:
-        raise credentials_exception
+    if user is None: raise credentials_exception
     return user
 
-# --- 5. ROUTES ---
+# --- ROUTES ---
 
-# Public Route para sa Health Check
 @app.get("/")
 async def root():
     return {"message": "Leave Credit App API is running"}
 
-# Login Route
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_auth_db) # Connects to Postgres
+    db: Session = Depends(get_auth_db)
 ) -> models.Token:
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    user = get_user(db, form_data.username)
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -107,49 +86,21 @@ async def login_for_access_token(
     access_token = create_access_token(data={"sub": user.username})
     return models.Token(access_token=access_token, token_type="bearer")
 
-# Creating User Route
-@app.post("/admin/create-user", status_code=status.HTTP_201_CREATED)
-async def create_user(
-    user_in: models.UserInDB, 
-    db: Session = Depends(get_auth_db)
-):
-    # Check if user already exists
-    if get_user(db, user_in.username):
-        raise HTTPException(status_code=400, detail="Username already registered")
-    
-    # SAve new user to Postgres
-    new_user = models.UserTable(
-        username=user_in.username,
-        email=user_in.email,
-        full_name=user_in.full_name,
-        hashed_password=get_password_hash(user_in.hashed_password), # HASHING
-        disabled=False
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return {"message": f"User {new_user.username} successfully created in Postgres"}
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# Protected Route: Data from SQL Server
 @app.get("/LeaveHistory")
 async def get_leave_history(
     current_user: Annotated[models.UserTable, Depends(get_current_user)],
-    db: Session = Depends(get_payroll_db) # Connects to SQL Server
+    db: Session = Depends(get_payroll_db)
 ):
-    logged_in_id = current_user.id 
-
-    user_data = db.query(models.vw_TimeOffSummary).filter(
-        models.vw_TimeOffSummary.EmployeeID == logged_in_id
-    ).all()
-
-    # 3. Error Handling
-    if not user_data:
-        return []
-
-    return user_data
-
-# Siguraduhing na-import ang date at datetime sa main.py
-from datetime import date, datetime
+    # Naka-sort DESC para ang index [0] sa frontend ay ang pinaka-latest
+    return db.query(models.vw_TimeOffSummary).filter(
+        models.vw_TimeOffSummary.EmployeeID == current_user.id
+    ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).all()
 
 @app.post("/RequestLeave", status_code=status.HTTP_201_CREATED)
 async def request_leave(
@@ -158,20 +109,33 @@ async def request_leave(
     db: Session = Depends(get_payroll_db)
 ):
     try:
-
-        employee_info = db.query(models.vw_TimeOffSummary).filter(
+        # 1. Hanapin ang pinakahuling record (vw_TimeOffSummary)
+        last_record = db.query(models.vw_TimeOffSummary).filter(
             models.vw_TimeOffSummary.EmployeeID == current_user.id
-        ).first()
+        ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
 
-        # Default to 1 kung walang mahanap, o mag-error
-        emp_company_id = employee_info.CompanyId if employee_info else 1 
+        # Fallback values kung bagong employee
+        emp_company_id = last_record.CompanyId if last_record and last_record.CompanyId else 1
+        current_ending_balance = float(last_record.EndingBalance) if last_record else 0.0
+        current_available = float(last_record.AvailableCredits) if last_record else 0.0
 
+        # 2. Compute Days Requested
         days_diff = (leave_in.EndDate - leave_in.BeginDate).days + 1
         
+        # --- VALIDATION: Check kung sapat ang credits ---
+        if days_diff > current_available:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Insufficient balance. You only have {current_available} credits left."
+            )
 
+        # 3. New Available Balance (Bawas agad kahit Pending)
+        new_available = current_available - float(days_diff)
+
+        # 4. Save Record
         new_leave = models.LeaveTable(
             EmployeeId=current_user.id,
-            CompanyId=emp_company_id, # Dito na papasok ang value
+            CompanyId=emp_company_id,
             DateCreated=datetime.now(timezone.utc).date(),
             BeginDate=leave_in.BeginDate,
             EndDate=leave_in.EndDate,
@@ -179,17 +143,19 @@ async def request_leave(
             Description=leave_in.Description,
             UsedCredits=days_diff,
             ApprovalStatus="Pending",
-            OpeningBalance=0, 
+            OpeningBalance=current_ending_balance, 
             EarnedCredits=0,
-            EndingBalance=0,
-            AvailableCredits=0
+            EndingBalance=current_ending_balance,
+            AvailableCredits=new_available 
         )
 
         db.add(new_leave)
         db.commit()
 
-        return {"message": "Success! Leave request submitted."}
+        return {"message": "Leave request submitted. Credits updated."}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

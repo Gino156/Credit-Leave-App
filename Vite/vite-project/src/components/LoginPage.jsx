@@ -135,7 +135,7 @@ export default function LoginPage({ onLoginSuccess }) {
           <div className="mt-10 flex flex-col items-center gap-4">
             <Divider className="opacity-50" />
             <p className="text-slate-400 text-[11px] font-bold uppercase tracking-[0.2em]">
-              Powered by FTP IT Dept. v1.0
+              Powered by IT Dept. v1.3
             </p>
           </div>
         </CardBody>

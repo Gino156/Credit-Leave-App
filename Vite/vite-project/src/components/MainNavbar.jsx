@@ -27,7 +27,7 @@ export default function MainNavbar({ onLogout }) {
       <NavbarContent className="hidden sm:flex gap-8" justify="center">
         <NavbarItem><Link color="foreground" href="#">Dashboard</Link></NavbarItem>
         <NavbarItem isActive><Link href="#" aria-current="page">Leave Credits</Link></NavbarItem>
-        <NavbarItem><Link color="foreground" href="#">Settings</Link></NavbarItem>
+        <NavbarItem><Link color="foreground" href="#">Information</Link></NavbarItem>
       </NavbarContent>
 
       <NavbarContent justify="end">
@@ -40,7 +40,7 @@ export default function MainNavbar({ onLogout }) {
 
       <NavbarMenu>
         <NavbarMenuItem><Link className="w-full" href="#" size="lg">Dashboard</Link></NavbarMenuItem>
-        <NavbarMenuItem><Link className="w-full" href="#" size="lg">Settings</Link></NavbarMenuItem>
+        <NavbarMenuItem><Link className="w-full" href="#" size="lg">Information</Link></NavbarMenuItem>
         <NavbarMenuItem>
           <Link className="w-full" color="danger" href="#" size="lg" onClick={onLogout}>
             Log Out
