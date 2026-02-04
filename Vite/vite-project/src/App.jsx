@@ -30,7 +30,7 @@ function App() {
     if (!isAuthenticated) return;
     setLoading(true);
 
-    const BASE_URL = "http://127.0.0.1:8000";
+    const BASE_URL = "http://172.96.10.161:8000";
     const myToken = localStorage.getItem("access_token");
 
     // 1. Check Backend Health

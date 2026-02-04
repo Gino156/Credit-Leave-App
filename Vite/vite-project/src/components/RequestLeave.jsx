@@ -26,13 +26,13 @@ export default function RequestLeave({ isOpen, onClose, onSubmitSuccess }) {
   };
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/RequestLeave", {
+    const response = await fetch("http://172.96.10.161:8000/RequestLeave", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${myToken}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload) // Gamitin ang payload dito
+      body: JSON.stringify(payload)
     });
 
     if (response.ok) {
