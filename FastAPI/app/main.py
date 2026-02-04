@@ -165,14 +165,10 @@ async def get_user_profile(
     current_user: Annotated[models.UserTable, Depends(get_current_user)],
     db_payroll: Session = Depends(get_payroll_db)
 ):
-    # Hanapin ang latest record sa SQL Server View gamit ang ID ng user mula sa Postgres
     last_record = db_payroll.query(models.vw_TimeOffSummary).filter(
         models.vw_TimeOffSummary.EmployeeID == current_user.id
     ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
 
-    # FALLBACK LOGIC:
-    # Pangalan: EmployeeName (SQL) -> fallback sa full_name (Postgres)
-    # ID: EmployeeID (SQL) -> fallback sa id (Postgres)
     
     return {
         "id": current_user.id, # Common ID link
@@ -180,7 +176,7 @@ async def get_user_profile(
         "credits": {
             "ending_balance": float(last_record.EndingBalance) if last_record else 0.0,
             "earned": float(last_record.EarnedCredits) if last_record else 0.0,
-            "consumed": float(last_record.Consumed) if last_record else 0.0, # Note: 'Consumed' ang nasa model mo, hindi 'UsedCredits'
+            "consumed": float(last_record.Consumed) if last_record else 0.0,
             "available": float(last_record.AvailableCredits) if last_record else 0.0,
         }
     }
