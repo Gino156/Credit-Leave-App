@@ -20,7 +20,7 @@ export default function MainNavbar({ onLogout }) {
         <NavbarMenuToggle aria-label={isMenuOpen ? "Close menu" : "Open menu"} className="sm:hidden" />
         <NavbarBrand>
           <FLogo />
-          <p className="font-bold text-inherit ml-2 tracking-tight uppercase">Leave Credit App</p>
+          <p className="font-bold text-inherit ml-2 tracking-tight uppercase">FTP Leave App</p>
         </NavbarBrand>
       </NavbarContent>
 

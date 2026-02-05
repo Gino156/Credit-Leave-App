@@ -31,6 +31,7 @@ class vw_TimeOffSummary(BasePayroll):
     __tablename__ = "vw_TimeOffSummary"
     LeaveApplicationId = Column(Integer, primary_key=True, index=True)
     EmployeeID = Column(Integer, index=True) 
+    HireDate = Column(Date)
     DateCreated = Column(Date)
     BeginDate = Column(Date)
     EndDate = Column(Date)

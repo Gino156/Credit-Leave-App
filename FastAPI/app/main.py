@@ -109,53 +109,70 @@ async def request_leave(
     db: Session = Depends(get_payroll_db)
 ):
     try:
-        # 1. Hanapin ang pinakahuling record (vw_TimeOffSummary)
+        # 1. Kunin ang HireDate at Last Record
+        # Ginagamit natin ang query para makuha ang HireDate mula sa Employees table
+        emp_data = db.execute(
+            "SELECT HireDate FROM Employees WHERE EmployeeID = :id", 
+            {"id": current_user.id}
+        ).fetchone()
+
         last_record = db.query(models.vw_TimeOffSummary).filter(
             models.vw_TimeOffSummary.EmployeeID == current_user.id
         ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
 
-        # Fallback values kung bagong employee
-        emp_company_id = last_record.CompanyId if last_record and last_record.CompanyId else 1
-        current_ending_balance = float(last_record.EndingBalance) if last_record else 0.0
-        current_available = float(last_record.AvailableCredits) if last_record else 0.0
+        # 2. Re-calculate Earned Credits (Logic ni Gino Reyes)
+        earned_credits = 0.0
+        if emp_data and emp_data.HireDate:
+            h_date = emp_data.HireDate
+            c_year = date.today().year # 2026
+            
+            if c_year > h_date.year:
+                if h_date.month <= 2:
+                    earned_credits = 10.0
+                else:
+                    earned_credits = float(min(12 - h_date.month + 1, 10))
 
-        # 2. Compute Days Requested
-        days_diff = (leave_in.EndDate - leave_in.BeginDate).days + 1
+        # 3. Fallback values at Computation
+        current_ending_balance = float(last_record.EndingBalance) if last_record else 0.0
         
-        # --- VALIDATION: Check kung sapat ang credits ---
-        if days_diff > current_available:
+        # Ang TOTAL AVAILABLE ay: (Dating Balance + Earned ngayong taon)
+        # Babawasan lang natin ito ng mga nagamit na (Consumed) sa history
+        total_earned_and_prev = current_ending_balance + earned_credits
+        
+        days_requested = float((leave_in.EndDate - leave_in.BeginDate).days + 1)
+
+        # VALIDATION gamit ang updated calculation
+        if days_requested > total_earned_and_prev:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Insufficient balance. You only have {current_available} credits left."
+                detail=f"Insufficient balance. Available: {total_earned_and_prev} credits."
             )
 
-        # 3. New Available Balance (Bawas agad kahit Pending)
-        new_available = current_available - float(days_diff)
+        # 4. New Available Balance
+        new_available = total_earned_and_prev - days_requested
 
-        # 4. Save Record
+        # 5. Save Record
         new_leave = models.LeaveTable(
             EmployeeId=current_user.id,
-            CompanyId=emp_company_id,
+            CompanyId=last_record.CompanyId if last_record else 1,
             DateCreated=datetime.now(timezone.utc).date(),
             BeginDate=leave_in.BeginDate,
             EndDate=leave_in.EndDate,
             TimeOffType=leave_in.TimeOffType,
             Description=leave_in.Description,
-            UsedCredits=days_diff,
+            UsedCredits=days_requested,
             ApprovalStatus="Pending",
             OpeningBalance=current_ending_balance, 
-            EarnedCredits=0,
-            EndingBalance=current_ending_balance,
+            EarnedCredits=earned_credits, # I-save na natin ang calculated earned credits
+            EndingBalance=current_ending_balance, # Maintain base balance
             AvailableCredits=new_available 
         )
 
         db.add(new_leave)
         db.commit()
 
-        return {"message": "Leave request submitted. Credits updated."}
+        return {"message": "Leave request submitted successfully."}
 
-    except HTTPException as he:
-        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -165,18 +182,48 @@ async def get_user_profile(
     current_user: Annotated[models.UserTable, Depends(get_current_user)],
     db_payroll: Session = Depends(get_payroll_db)
 ):
+    from sqlalchemy import text
+    
+    # 1. Kunin ang HireDate
+    emp_query = text("SELECT HireDate FROM Employees WHERE EmployeeID = :id")
+    emp_result = db_payroll.execute(emp_query, {"id": current_user.id}).mappings().first()
+
+    # 2. Kunin ang huling record
     last_record = db_payroll.query(models.vw_TimeOffSummary).filter(
         models.vw_TimeOffSummary.EmployeeID == current_user.id
     ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
 
+    earned_credits = 0.0
+    if emp_result and emp_result["HireDate"]:
+        hire_date = emp_result["HireDate"]
+        if isinstance(hire_date, str):
+            hire_date = datetime.strptime(hire_date[:10], "%Y-%m-%d").date()
+        elif isinstance(hire_date, datetime):
+            hire_date = hire_date.date()
+            
+        current_year = 2026 
+        if current_year > hire_date.year:
+            hire_month = hire_date.month 
+            earned_credits = 10.0 if hire_month <= 2 else float(12 - hire_month)
+            earned_credits = max(0.0, min(earned_credits, 10.0))
+
+    # --- BAGONG LOGIC PARA SA ENDING BALANCE ---
+    # Ang starting pool ay ang Earned Credits (5) + anumang carry-over (kung meron)
+    # Kung wala pang last_record, ang ending_bal ay equal sa earned_credits
+    base_balance = float(last_record.EndingBalance) if last_record else earned_credits
+    consumed = float(last_record.Consumed) if last_record else 0.0
     
+    # EndingBalance should reflect current pool minus consumption
+    current_ending_bal = base_balance - consumed
+    available = current_ending_bal # Sa ngayon, parehas sila dahil earned logic ang gamit
+
     return {
-        "id": current_user.id, # Common ID link
+        "id": current_user.id,
         "full_name": last_record.EmployeeName if last_record else current_user.full_name,
         "credits": {
-            "ending_balance": float(last_record.EndingBalance) if last_record else 0.0,
-            "earned": float(last_record.EarnedCredits) if last_record else 0.0,
-            "consumed": float(last_record.Consumed) if last_record else 0.0,
-            "available": float(last_record.AvailableCredits) if last_record else 0.0,
+            "ending_balance": available, # Gagawin nating 5 ito hangga't consumed is 0
+            "earned": earned_credits,
+            "consumed": consumed,
+            "available": available,
         }
     }
