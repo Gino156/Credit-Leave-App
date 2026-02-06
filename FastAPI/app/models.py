@@ -4,50 +4,64 @@ from database import BasePayroll, BaseAuth
 from pydantic import BaseModel
 
 # --- SQL SERVER MODELS (Binds to BasePayroll) ---
-class LeaveTable(BasePayroll):
-    __tablename__ = "LeaveApplication"
+
+class LeaveApplication(BasePayroll):
+    # DITO ANG FIX: Dapat ituro sa totoong Table, hindi sa View
+    __tablename__ = "LeaveApplication" 
+
+    __table_args__ = {"implicit_returning": False}
+
+    # Primary Key ay LeaveApplicationId lang base sa screenshot
+    LeaveApplicationId = Column(Integer, primary_key=True, index=True, autoincrement=True) 
+    EmployeeId = Column(Integer, index=True)
+    DateCreated = Column(Date, default=date.today) # Gamitin ang Date imbes na DateTime
+    BeginDate = Column(Date)
+    EndDate = Column(Date)
+    HoursOff = Column(Integer)
+    Description = Column(String) # varchar(MAX) sa screenshot, String sa SQLAlchemy
+    ApprovalStatus = Column(String)
+    TimeOffType = Column(String)
+    UsedCredits = Column(Integer)
+    CompanyId = Column(Integer)
+    # Idagdag ang mga missing columns base sa screenshot mo:
+    Approver = Column(Integer, nullable=True)
+    Label = Column(Integer, nullable=True)
+    Status = Column(Integer, nullable=True)
+
+class vw_LeaveApplication(BasePayroll):
+    __tablename__ = "vw_LeaveApplication"
 
     __table_args__ = {"implicit_returning": False}
 
     LeaveApplicationId = Column(Integer, primary_key=True, index=True) 
-    EmployeeId = Column(Integer)
+    EmployeeId = Column(Integer, primary_key=True, index=True)
     DateCreated = Column(Date)
     BeginDate = Column(Date)
     EndDate = Column(Date)
-    ApprovalStatus = Column(String) 
+    HoursOff = Column(Integer)
     Description = Column(Text)
+    ApprovalStatus = Column(Text)
+    TimeOffType = Column(Text)
     UsedCredits = Column(Integer)
-    TimeOffType = Column(String)
-    OpeningBalance = Column(Numeric, default=0)
-    EarnedCredits = Column(Numeric, default=0)
-    EndingBalance = Column(Numeric, default=0)
-    AvailableCredits = Column(Numeric, default=0)
-    LeaveApplicationId = Column(Integer, primary_key=True, index=True)
-    EmployeeId = Column(Integer)
     CompanyId = Column(Integer)
+
+
 
 class vw_TimeOffSummary(BasePayroll):
     #must match the column names in SQL Server
     __tablename__ = "vw_TimeOffSummary"
-    LeaveApplicationId = Column(Integer, primary_key=True, index=True)
-    EmployeeID = Column(Integer, index=True) 
-    HireDate = Column(Date)
-    DateCreated = Column(Date)
-    BeginDate = Column(Date)
-    EndDate = Column(Date)
-    EmployeeName = Column(String)
-    Consumed = Column(Integer)
-    Description = Column(String)
-    TimeOffType = Column(String)
-    ApprovalStatus = Column(String)
-    Year = Column(Integer)
-    CompanyId = Column(Integer)
-    CompanyName = Column(String)
+    EmployeeId = Column(Integer, primary_key=True, index=True)
+    CompanyId = Column(Integer, primary_key=True, index=True)
     CompanyCode = Column(String)
+    CompanyName = Column(String)
+    EmployeeName = Column(String)
+    Year = Column(Integer, primary_key=True, index=True)
+    TimeOffType = Column(String)
     OpeningBalance = Column(Integer)
-    EarnedCredits = Column(Integer)
+    Earned = Column(Integer)
+    Consumed = Column(Integer)
     EndingBalance = Column(Integer)
-    AvailableCredits = Column(Integer) 
+    Available = Column(Integer)
 
 # --- POSTGRESQL MODELS (Binds to BaseAuth) ---
 class UserTable(BaseAuth):
@@ -76,7 +90,6 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
-    # Idagdag ito sa dulo ng models.py
 class LeaveRequestCreate(BaseModel):
     TimeOffType: str
     BeginDate: date

@@ -14,21 +14,23 @@ PG_DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}
 pg_engine = create_engine(PG_DATABASE_URL)
 SessionAuth = sessionmaker(autocommit=False, autoflush=False, bind=pg_engine)
 
-# ETO YUNG IMPORTANTE:
 BaseAuth = declarative_base() 
 
 # --- SQL SERVER (Payroll) ---
+sql_user = "devsa"
+sql_pass = urllib.parse.quote_plus("Ftp@2024?")
+sql_host = "172.96.10.78"
+
+# Dito natin bubuuin ang URL variable na hinahanap ng main.py
 MSSQL_DATABASE_URL = (
-    "mssql+pyodbc://./PayrollDB?"
-    "driver=ODBC+Driver+18+for+SQL+Server&"
-    "Trusted_Connection=yes&"
-    "Encrypt=yes&"
-    "TrustServerCertificate=yes"
+    f"mssql+pyodbc://{sql_user}:{sql_pass}@{sql_host}/PayrollDB"
+    "?driver=ODBC+Driver+17+for+SQL+Server"
 )
-ms_engine = create_engine(MSSQL_DATABASE_URL)
+
+# Gamitin ang variable na MSSQL_DATABASE_URL
+ms_engine = create_engine(MSSQL_DATABASE_URL, fast_executemany=True)
 SessionPayroll = sessionmaker(autocommit=False, autoflush=False, bind=ms_engine)
 
-# ETO PA YUNG ISA:
 BasePayroll = declarative_base() 
 
 # --- DEPENDENCIES ---

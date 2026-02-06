@@ -155,7 +155,7 @@ export default function LoginPage({ onLoginSuccess }) {
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="w-[90%] max-w-105 bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl flex flex-col"
+              className="w-[90%] max-w-105 bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl shadow-green-300 flex flex-col"
             >
               <div className="mb-6">
                 <h2 className="text-2xl font-black text-slate-800 leading-none">Login</h2>

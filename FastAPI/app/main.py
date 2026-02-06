@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text, desc
 
 # Local imports
 import jwt
@@ -27,7 +28,7 @@ app.add_middleware(
 )
 
 # --- SECURITY CONFIG ---
-SECRET_KEY ="f34fb792147d3f5b418cebec18fd2b192b961b2acae5cdb1136f9dc5acc7ae52"
+SECRET_KEY = "f34fb792147d3f5b418cebec18fd2b192b961b2acae5cdb1136f9dc5acc7ae52"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -43,6 +44,12 @@ def get_password_hash(password):
 
 def get_user(db: Session, username: str):
     return db.query(models.UserTable).filter(models.UserTable.username == username).first()
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # --- DEPENDENCIES ---
 async def get_current_user(
@@ -71,6 +78,25 @@ async def get_current_user(
 async def root():
     return {"message": "Leave Credit App API is running"}
 
+# --- NEW: REGISTER USER ---
+@app.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_user(user_in: models.UserInDB, db: Session = Depends(get_auth_db)):
+    db_user = get_user(db, username=user_in.username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    new_user = models.UserTable(
+        username=user_in.username,
+        email=user_in.email,
+        full_name=user_in.full_name,
+        hashed_password=get_password_hash(user_in.hashed_password),
+        disabled=False
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully", "username": new_user.username}
+
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -86,21 +112,15 @@ async def login_for_access_token(
     access_token = create_access_token(data={"sub": user.username})
     return models.Token(access_token=access_token, token_type="bearer")
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 @app.get("/LeaveHistory")
 async def get_leave_history(
     current_user: Annotated[models.UserTable, Depends(get_current_user)],
     db: Session = Depends(get_payroll_db)
 ):
-    # Naka-sort DESC para ang index [0] sa frontend ay ang pinaka-latest
-    return db.query(models.vw_TimeOffSummary).filter(
-        models.vw_TimeOffSummary.EmployeeID == current_user.id
-    ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).all()
+    # PALITAN: Mula vw_TimeOffSummary -> vw_LeaveApplication
+    return db.query(models.vw_LeaveApplication).filter(
+        models.vw_LeaveApplication.EmployeeId == current_user.id
+    ).order_by(desc(models.vw_LeaveApplication.DateCreated)).all()
 
 @app.post("/RequestLeave", status_code=status.HTTP_201_CREATED)
 async def request_leave(
@@ -109,70 +129,61 @@ async def request_leave(
     db: Session = Depends(get_payroll_db)
 ):
     try:
-        # 1. Kunin ang HireDate at Last Record
-        # Ginagamit natin ang query para makuha ang HireDate mula sa Employees table
-        emp_data = db.execute(
-            "SELECT HireDate FROM Employees WHERE EmployeeID = :id", 
-            {"id": current_user.id}
-        ).fetchone()
+        emp_query = text("SELECT HireDate FROM Employee WHERE EmployeeId = :id")
+        emp_data = db.execute(emp_query, {"id": current_user.id}).mappings().first()
 
         last_record = db.query(models.vw_TimeOffSummary).filter(
-            models.vw_TimeOffSummary.EmployeeID == current_user.id
-        ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
+            models.vw_TimeOffSummary.EmployeeId == current_user.id
+        ).order_by(desc(models.vw_TimeOffSummary.Year)).first()
 
-        # 2. Re-calculate Earned Credits (Logic ni Gino Reyes)
         earned_credits = 0.0
-        if emp_data and emp_data.HireDate:
-            h_date = emp_data.HireDate
-            c_year = date.today().year # 2026
-            
-            if c_year > h_date.year:
-                if h_date.month <= 2:
-                    earned_credits = 10.0
-                else:
-                    earned_credits = float(min(12 - h_date.month + 1, 10))
+        current_pool = 0.0
+        current_year = date.today().year
 
-        # 3. Fallback values at Computation
-        current_ending_balance = float(last_record.EndingBalance) if last_record else 0.0
-        
-        # Ang TOTAL AVAILABLE ay: (Dating Balance + Earned ngayong taon)
-        # Babawasan lang natin ito ng mga nagamit na (Consumed) sa history
-        total_earned_and_prev = current_ending_balance + earned_credits
-        
+        if last_record:
+            current_pool = float(last_record.Available or 0)
+            earned_credits = float(last_record.Earned or 0)
+        else:
+            if emp_data and emp_data["HireDate"]:
+                h_date = emp_data["HireDate"]
+                if isinstance(h_date, str):
+                    h_date = datetime.strptime(h_date[:10], "%Y-%m-%d").date()
+                elif isinstance(h_date, datetime):
+                    h_date = h_date.date()
+                
+                if current_year > h_date.year:
+                    hire_month = h_date.month
+                    earned_credits = 10.0 if hire_month <= 2 else float(12 - hire_month)
+                    earned_credits = max(0.0, min(earned_credits, 10.0))
+            current_pool = earned_credits
+
         days_requested = float((leave_in.EndDate - leave_in.BeginDate).days + 1)
 
-        # VALIDATION gamit ang updated calculation
-        if days_requested > total_earned_and_prev:
+        if days_requested > current_pool:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Insufficient balance. Available: {total_earned_and_prev} credits."
+                detail=f"Insufficient balance. Available: {current_pool} credits."
             )
 
-        # 4. New Available Balance
-        new_available = total_earned_and_prev - days_requested
-
-        # 5. Save Record
-        new_leave = models.LeaveTable(
+        new_leave = models.LeaveApplication(
             EmployeeId=current_user.id,
             CompanyId=last_record.CompanyId if last_record else 1,
-            DateCreated=datetime.now(timezone.utc).date(),
+            DateCreated=datetime.now(timezone.utc),
             BeginDate=leave_in.BeginDate,
             EndDate=leave_in.EndDate,
             TimeOffType=leave_in.TimeOffType,
             Description=leave_in.Description,
-            UsedCredits=days_requested,
+            UsedCredits=int(days_requested),
             ApprovalStatus="Pending",
-            OpeningBalance=current_ending_balance, 
-            EarnedCredits=earned_credits, # I-save na natin ang calculated earned credits
-            EndingBalance=current_ending_balance, # Maintain base balance
-            AvailableCredits=new_available 
+            HoursOff=int(days_requested * 8)
         )
 
         db.add(new_leave)
         db.commit()
-
         return {"message": "Leave request submitted successfully."}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -182,48 +193,29 @@ async def get_user_profile(
     current_user: Annotated[models.UserTable, Depends(get_current_user)],
     db_payroll: Session = Depends(get_payroll_db)
 ):
-    from sqlalchemy import text
-    
-    # 1. Kunin ang HireDate
-    emp_query = text("SELECT HireDate FROM Employees WHERE EmployeeID = :id")
-    emp_result = db_payroll.execute(emp_query, {"id": current_user.id}).mappings().first()
-
-    # 2. Kunin ang huling record
     last_record = db_payroll.query(models.vw_TimeOffSummary).filter(
-        models.vw_TimeOffSummary.EmployeeID == current_user.id
-    ).order_by(models.vw_TimeOffSummary.LeaveApplicationId.desc()).first()
+        models.vw_TimeOffSummary.EmployeeId == current_user.id
+    ).order_by(desc(models.vw_TimeOffSummary.Year)).first()
 
-    earned_credits = 0.0
-    if emp_result and emp_result["HireDate"]:
-        hire_date = emp_result["HireDate"]
-        if isinstance(hire_date, str):
-            hire_date = datetime.strptime(hire_date[:10], "%Y-%m-%d").date()
-        elif isinstance(hire_date, datetime):
-            hire_date = hire_date.date()
-            
-        current_year = 2026 
-        if current_year > hire_date.year:
-            hire_month = hire_date.month 
-            earned_credits = 10.0 if hire_month <= 2 else float(12 - hire_month)
-            earned_credits = max(0.0, min(earned_credits, 10.0))
-
-    # --- BAGONG LOGIC PARA SA ENDING BALANCE ---
-    # Ang starting pool ay ang Earned Credits (5) + anumang carry-over (kung meron)
-    # Kung wala pang last_record, ang ending_bal ay equal sa earned_credits
-    base_balance = float(last_record.EndingBalance) if last_record else earned_credits
-    consumed = float(last_record.Consumed) if last_record else 0.0
+    if last_record:
+        return {
+            "id": current_user.id,
+            "full_name": last_record.EmployeeName or current_user.full_name,
+            "credits": {
+                "ending_balance": int(last_record.EndingBalance or 0),
+                "earned": int(last_record.Earned or 0),
+                "consumed": int(last_record.Consumed),
+                "available": int(last_record.Available or 0),
+            }
+        }
     
-    # EndingBalance should reflect current pool minus consumption
-    current_ending_bal = base_balance - consumed
-    available = current_ending_bal # Sa ngayon, parehas sila dahil earned logic ang gamit
-
     return {
         "id": current_user.id,
-        "full_name": last_record.EmployeeName if last_record else current_user.full_name,
+        "full_name": current_user.full_name,
         "credits": {
-            "ending_balance": available, # Gagawin nating 5 ito hangga't consumed is 0
-            "earned": earned_credits,
-            "consumed": consumed,
-            "available": available,
+            "ending_balance": 0.0,
+            "earned": 0.0,
+            "consumed": 0.0,
+            "available": 0.0,
         }
     }

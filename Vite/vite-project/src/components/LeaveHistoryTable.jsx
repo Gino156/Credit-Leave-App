@@ -1,3 +1,4 @@
+import React from "react";
 import { 
   Card, CardHeader, CardBody, Divider, Table, TableHeader, 
   TableColumn, TableBody, TableRow, TableCell, Chip, Skeleton 
@@ -13,42 +14,77 @@ const LeaveHistoryTable = ({ data, loading }) => {
     }
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: '2-digit',
+      year: '2-digit'
+    });
+  };
+
   return (
-    <Card className="shadow-sm xl:col-span-3">
-      <CardHeader className="px-6 pt-6 pb-2 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-slate-800">Leave History</h2>
+    <Card className="shadow-sm border-none h-112.5">
+      <CardHeader className="px-6 py-4 flex justify-between items-center sticky top-0 bg-white z-20">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Leave History</h2>
+          <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Record Logs</p>
+        </div>
+        <Chip size="sm" variant="flat" color="primary" className="font-mono text-[10px]">
+          {data.length} Total
+        </Chip>
       </CardHeader>
-      <Divider className="opacity-50" />
-      <CardBody className="px-2 sm:px-4">
-        <Table isStriped aria-label="Leave History" removeWrapper shadow="none" className="min-w-full">
+      <Divider />
+      
+      <CardBody className="p-0 overflow-y-auto scrollbar-hide">
+        <Table 
+          isHeaderSticky
+          aria-label="Leave History Table" 
+          removeWrapper 
+          shadow="none" 
+          className="min-w-full"
+        >
           <TableHeader>
-            <TableColumn className="bg-transparent text-gray-400">ID</TableColumn>
-            <TableColumn className="bg-transparent text-gray-400">BEGIN</TableColumn>
-            <TableColumn className="bg-transparent text-gray-400">END</TableColumn>
-            <TableColumn className="bg-transparent text-gray-400">TYPE</TableColumn>
-            <TableColumn className="bg-transparent text-gray-400">STATUS</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3">ID</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3">FILED</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3">BEGIN</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3">END</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3">TYPE</TableColumn>
+            <TableColumn className="bg-gray-50/80 text-gray-400 text-[10px] py-3 text-center">STATUS</TableColumn>
           </TableHeader>
+          
           <TableBody emptyContent={!loading && "No records found."}>
             {loading ? (
-              Array.from({ length: 5 }).map((_, index) => (
+              Array.from({ length: 8 }).map((_, index) => (
                 <TableRow key={index}>
-                  <TableCell><Skeleton className="h-3 w-8 rounded-lg" /></TableCell>
-                  <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
-                  <TableCell><Skeleton className="h-3 w-20 rounded-lg" /></TableCell>
-                  <TableCell><Skeleton className="h-3 w-16 rounded-lg" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                  <TableCell><Skeleton className="h-3 w-6 rounded-lg" /></TableCell>
+                  <TableCell><Skeleton className="h-3 w-10 rounded-lg" /></TableCell>
+                  <TableCell><Skeleton className="h-3 w-10 rounded-lg" /></TableCell>
+                  <TableCell><Skeleton className="h-3 w-10 rounded-lg" /></TableCell>
+                  <TableCell><Skeleton className="h-3 w-14 rounded-lg" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-14 rounded-full mx-auto" /></TableCell>
                 </TableRow>
               ))
             ) : (
               data.map((item) => (
-                <TableRow key={item.LeaveApplicationId}>
-                  <TableCell className="font-bold">{item.LeaveApplicationId}</TableCell>
-                  <TableCell className="text-xs">{item.BeginDate}</TableCell>
-                  <TableCell className="text-xs">{item.EndDate}</TableCell>
-                  <TableCell className="text-xs">{item.TimeOffType}</TableCell>
+                <TableRow key={item.LeaveApplicationId} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-none">
+                  <TableCell className="text-[11px] font-bold text-slate-500">{item.LeaveApplicationId}</TableCell>
+                  <TableCell className="text-[11px] font-medium text-slate-600">{formatDate(item.DateCreated)}</TableCell>
+                  <TableCell className="text-[11px] text-slate-600">{formatDate(item.BeginDate)}</TableCell>
+                  <TableCell className="text-[11px] text-slate-600">{formatDate(item.EndDate)}</TableCell>
                   <TableCell>
-                    <Chip size="sm" color={getStatusColor(item.ApprovalStatus)} variant="dot" className="border-none font-bold uppercase">
-                      {item.ApprovalStatus}
+                    <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md whitespace-nowrap">
+                      {item.TimeOffType}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Chip 
+                      size="sm" 
+                      color={getStatusColor(item.ApprovalStatus)} 
+                      variant="dot" 
+                      className="border-none font-bold uppercase text-[9px] h-6"
+                    >
+                      {item.ApprovalStatus || "Pending"}
                     </Chip>
                   </TableCell>
                 </TableRow>

@@ -10,7 +10,6 @@ import MainNavbar from './components/MainNavbar';
 import LeaveHistoryTable from './components/LeaveHistoryTable';
 import RequestLeave from './components/RequestLeave';
 
-// Icons
 export const PlusIcon = ({ fill = "currentColor", size = 24 }) => (
   <svg fill="none" height={size} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg">
     <path d="M12 5V19M5 12H19" stroke={fill} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -18,15 +17,13 @@ export const PlusIcon = ({ fill = "currentColor", size = 24 }) => (
 );
 
 function App() {
-  // --- STATES & HOOKS ---
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("access_token"));
   const [leaveHistory, setLeaveHistory] = useState([]);
-  const [userProfile, setUserProfile] = useState(null); // New state for merged User data
+  const [userProfile, setUserProfile] = useState(null);
   const [apiData, setApiData] = useState("Loading...");
   const [loading, setLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  // --- DATA FETCHING ---
   const fetchData = async () => {
     if (!isAuthenticated) return;
     setLoading(true);
@@ -39,22 +36,25 @@ function App() {
     };
 
     try {
-      // 1. Check Backend Health
+      // 1. Health Check
       fetch(BASE_URL)
         .then(res => res.json())
-        .then(data => setApiData(data.message))
+        .then(data => setApiData(data.message || "Running"))
         .catch(() => setApiData("Server Offline"));
 
-      // 2. Fetch Merged Profile (Postgres + SQL Server Fallback)
-      const profileRes = await fetch(`${BASE_URL}/User/Me`, { headers });
-      if (profileRes.status === 401) return handleLogout();
-      const profileData = await profileRes.json();
-      setUserProfile(profileData);
+      // 2. Fetch Profile & Leave History nang sabay (Parallel)
+      const [profileRes, historyRes] = await Promise.all([
+        fetch(`${BASE_URL}/User/Me`, { headers }),
+        fetch(`${BASE_URL}/LeaveHistory`, { headers })
+      ]);
 
-      // 3. Fetch Leave History
-      const historyRes = await fetch(`${BASE_URL}/LeaveHistory`, { headers });
+      if (profileRes.status === 401) return handleLogout();
+
+      const profileData = await profileRes.json();
       const historyData = await historyRes.json();
-      setLeaveHistory(historyData);
+
+      setUserProfile(profileData);
+      setLeaveHistory(Array.isArray(historyData) ? historyData : []);
 
     } catch (error) {
       console.error("Fetch Error:", error);
@@ -67,7 +67,6 @@ function App() {
     fetchData();
   }, [isAuthenticated]);
 
-  // --- HANDLERS ---
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     setIsAuthenticated(false);
@@ -76,33 +75,30 @@ function App() {
   };
 
   // --- STATS CALCULATION ---
-  // Priority: 1. SQL Server View (leaveHistory) | 2. Profile API credits | 3. Hardcoded 0
+  // Kumukuha ng stats mula sa pinakabagong record sa history o sa profile credits
   const stats = [
     { 
       label: "Ending balance", 
-      value: leaveHistory[0]?.EndingBalance ?? userProfile?.credits?.ending_balance ?? "0", 
+      value: userProfile?.credits?.ending_balance ?? "0",
       color: "text-black" 
     },
     { 
       label: "Earned", 
-      value: leaveHistory[0]?.EarnedCredits ?? userProfile?.credits?.earned ?? "0", 
+      value: userProfile?.credits?.earned ?? "0",
       color: "text-blue-600" 
     },
     { 
       label: "Consumed", 
-      value: leaveHistory.length > 0 
-        ? leaveHistory.reduce((sum, item) => sum + (item.Status === 'Approved' ? item.UsedCredits : 0), 0)
-        : userProfile?.credits?.consumed ?? "0", 
+      value: userProfile?.credits?.consumed ?? "0",
       color: "text-red-600" 
     },
     { 
       label: "Available", 
-      value: leaveHistory[0]?.AvailableCredits ?? userProfile?.credits?.available ?? "0", 
+      value: userProfile?.credits?.available ?? "0", 
       color: "text-green-600" 
     }
   ];
 
-  // --- AUTH BOUNCER ---
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
@@ -128,9 +124,8 @@ function App() {
               isBordered: true,
               className: "border-green-600 border-2 bg-white text-slate-400" 
             }}
-            // FALLBACK LOGIC: Use userProfile if leaveHistory is empty
-            description={loading ? <Skeleton className="h-3 w-24 rounded-lg mt-1" /> : `Employee ID: ${userProfile?.id || "N/A"}`}
-            name={loading ? <Skeleton className="h-4 w-32 rounded-lg" /> : (userProfile?.full_name || "Guest User")}
+            description={loading ? <Skeleton className="h-3 w-24 rounded-lg mt-1" /> : `Employee ID: ${userProfile?.EmployeeId || userProfile?.id || "N/A"}`}
+            name={loading ? <Skeleton className="h-4 w-32 rounded-lg" /> : (userProfile?.full_name || "User")}
             className="transition-transform hover:scale-105 uppercase font-bold"
           />
           <Button 
@@ -162,7 +157,7 @@ function App() {
           ))}
         </div>
 
-        {/* BOTTOM DASHBOARD SECTION */}
+        {/* BOTTOM SECTION */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 sm:gap-8">
           
           <Card className="shadow-sm xl:col-span-2 overflow-hidden border-none">
@@ -187,7 +182,7 @@ function App() {
             </CardBody>
             <Divider className="opacity-50" />
             <div className="p-4 flex justify-between items-center bg-gray-50/30">
-              <span className="text-[10px] text-gray-400 font-mono tracking-tighter uppercase">Environment: Production</span>
+              <span className="text-[10px] text-gray-400 font-mono tracking-tighter uppercase">Env: Production</span>
               <Button size="sm" variant="light" color="primary" className="font-bold" onPress={fetchData}>Refresh Data</Button>
             </div>
           </Card>
